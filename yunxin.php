@@ -151,7 +151,7 @@ function cutVideo($classify,$filename){
 	}else{
 		//去除片头片尾加音乐
 		echo "*********************".PHP_EOL.PHP_EOL.strTo("开始去除片头片尾").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
-		$cmd = 'ffmpeg -i '.$vpath.' -stream_loop -1 -i '.$mp3.' -map 0:v -ss '.$start_time.' -t 30 -c:v h264 -map 1:a -c:a copy cache/'.$filename;
+		$cmd = 'ffmpeg -i '.$vpath.' -stream_loop -1 -i '.$mp3.' -map 0:v -ss '.$start_time.' -t '.$end_time.' -c:v h264 -map 1:a -c:a copy cache/'.$filename;
 		shell_exec($cmd);
 		//转换成mpg
 		echo "*********************".PHP_EOL.PHP_EOL.strTo("转换成mpg").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
