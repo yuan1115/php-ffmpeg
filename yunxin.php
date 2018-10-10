@@ -27,22 +27,33 @@ function strTo($str){
  * [getNeed 获取视频需要的背景音乐/片头/片尾/logo]
  * @param  [type] $classify [分类名]
  * @param  [type] $para [全局变量参数如footer]
+ * @param  [type] $hf   [是否是片头片尾]
  * @return [type]       [description]
  */
-function getNeed($classify,$para){
+function getNeed($classify,$para,$hf=0){
 	$reArr = scandir($GLOBALS[$para].'/'.$classify);
 	unset($reArr[0],$reArr[1]);
 	if(count($reArr)>0){
 		$count = count($reArr);
 		$k = rand(2,$count+1);
-		$res['path'] = $GLOBALS[$para]."/".$classify.'/'.$reArr[$k];
-		$res['filename'] = $reArr[$classify][$k];
+		$path = $GLOBALS[$para]."/".$classify.'/'.$reArr[$k];
+		$filename = $reArr[$classify][$k];
 	}else{
 		$reArr = scandir($GLOBALS[$para].'/common');
 		unset($reArr[0],$reArr[1]);
 		$count = count($reArr);
 		$k = rand(2,$count+1);
-		$res['path'] = $GLOBALS[$para]."/common/".$reArr[$k];
+		$path = $GLOBALS[$para]."/common/".$reArr[$k];
+		$filename = $reArr[$k];
+	}
+	if($hf==1&&strpos($filename, '.mp4')){
+		$cmd = 'ffmpeg -i '.$path.' -q 0 '.str_replace('.mp4', '.mpg', $path);
+		shell_exec($cmd);
+		$res['path'] = str_replace('.mp4', '.mpg', $path);
+		$res['filename'] = str_replace('.mp4', '.mpg', $reArr[$k]);
+		unlink($path);
+	}else{
+		$res['path'] = $path;
 		$res['filename'] = $reArr[$k];
 	}
 	return $res;
@@ -104,6 +115,9 @@ function file_name_format($classify,$fileName){
 	}
 	$res = translate($filename,'auto','zh');
 	$dstName = iconv('utf-8', 'gbk', $res['trans_result'][0]['dst']);
+	foreach ($str as $k => $v) {
+		$dstName = str_replace($v, '', $dstName);
+	}
 	if($dstName){
 		$f = '"'.getcwd().'\\'.$GLOBALS['video'].'\\'.$classify.'\\'.$fileName.'"';
 		$of ='"'.getcwd().'\\'.$GLOBALS['video'].'\\'.$classify.'\\'.$dstName.'.mp4"';
@@ -119,7 +133,6 @@ function file_name_format($classify,$fileName){
  * [cutVideo 视频剪切]
  * @param  [type] $classify [分类名]
  * @param  [type] $filename [文件民]
- * @param  [type] $des      [输出名]
  * @return [type]           [description]
  */
 function cutVideo($classify,$filename){
@@ -136,37 +149,32 @@ function cutVideo($classify,$filename){
 	if($videoInfo['duration'] >= $config[$classify]['cut_max_time'] && $config[$classify]['cut_max_time']!=0){
 
 	}else{
-		//去除片头片尾
+		//去除片头片尾加音乐
 		echo "*********************".PHP_EOL.PHP_EOL.strTo("开始去除片头片尾").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
-		$cmd = 'ffmpeg -ss '.$start_time.' -t 2 -i '.$vpath.' -q 0 cache/'.$filename.".mpg";
-		$res = shell_exec($cmd);
-		//获取片头
-		echo "*********************".PHP_EOL.PHP_EOL.strTo("获取片头").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
-		$headerArr = getNeed($classify,$GLOBALS['header']);
-		$header = $headerArr['path'];
-		$headerName = $headerArr['filename'];
-		$cmd1 = 'ffmpeg -i '.$header.' -q 0 cache/header.mpg';
-		// echo $cmd1.PHP_EOL;
+		$cmd = 'ffmpeg -i '.$vpath.' -stream_loop -1 -i '.$mp3.' -map 0:v -ss '.$start_time.' -t 30 -c:v h264 -map 1:a -c:a copy cache/'.$filename;
+		shell_exec($cmd);
+		//转换成mpg
+		echo "*********************".PHP_EOL.PHP_EOL.strTo("转换成mpg").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
+		$cmd1 = 'ffmpeg -i '.'cache/'.$filename.' -q 0 cache/'.$filename.'.mpg'; 
 		shell_exec($cmd1);
+		//获取片头
+		echo "*********************".PHP_EOL.PHP_EOL.strTo("开始获取片头").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
+		$headerArr = getNeed($classify,$GLOBALS['header'],1);
+		$header = $headerArr['path'];
 		//获取片尾
-		echo "*********************".PHP_EOL.PHP_EOL.strTo("获取片尾").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
-		$footerArr = getNeed($classify,$GLOBALS['footer']);
+		echo "*********************".PHP_EOL.PHP_EOL.strTo("开始获取片尾").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
+		$footerArr = getNeed($classify,$GLOBALS['footer'],1);
 		$footer = $footerArr['path'];
-		$footerName = $footerArr['filename'];
-		$cmd2 = 'ffmpeg -i '.$footer.' -q 0 cache/footer.mpg';
-		// echo $cmd2.PHP_EOL;
-		shell_exec($cmd2);
 		//添加片头片尾（合成视频）
-		echo "*********************".PHP_EOL.PHP_EOL.strTo("添加片头片尾（合成视频）").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
-		$cmd3 = 'ffmpeg -i "concat:cache/header.mpg|cache/'.$filename.'.mpg|cache/footer.mpg" -q:a 10 cache/out'.$filename;
-		shell_exec($cmd3);
+		echo "*********************".PHP_EOL.PHP_EOL.strTo("开始添加片头片尾（合成视频）").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
+		$cmd2 = 'ffmpeg -i "concat:'.$header.'|cache/'.$filename.'.mpg|'.$footer.'" -q:a 10 cache/out'.$filename;
+		shell_exec($cmd2);
 		//获取logo
-		echo "*********************".PHP_EOL.PHP_EOL.strTo("获取logo").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
+		echo "*********************".PHP_EOL.PHP_EOL.strTo("开始添加logo").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
 		$logoArr = getNeed($classify,$GLOBALS['logo']);
 		$logo = $logoArr['path'];
-		$logoName = $logoArr['filename'];
-		$cmd4 = 'ffmpeg -i "cache/out'.$filename.'" -i '.$logo.' -filter_complex "[1:v][0:v]scale2ref=150:150 [wm][base];[base][wm]overlay=main_w-overlay_w-10:main_h-overlay_h-10" '.$GLOBALS['video_out'].'/'.$classify.'/'.$filename;
-		shell_exec($cmd4);
+		$cmd2 = 'ffmpeg -i "cache/out'.$filename.'" -i '.$logo.' -filter_complex "[1:v][0:v]scale2ref=150:150 [wm][base];[base][wm]overlay=main_w-overlay_w-10:main_h-overlay_h-10" '.$GLOBALS['video_out'].'/'.$classify.'/'.$filename;
+		shell_exec($cmd2);
 	}
 	$cache = scandir('cache');
 	foreach ($cache as $k => $v) {
@@ -174,10 +182,10 @@ function cutVideo($classify,$filename){
 			unlink('cache/'.$v);
 		}
 	}
-	unlink($vpath);
+	if(is_file($GLOBALS['video_out'].'/'.$classify.'/'.$filename)){
+		unlink($vpath);
+	}
 }
-
-//文件格式
 $path = scandir($GLOBALS['video']);
 foreach ($path as $k => $v) {
 	if($v!='.'&&$v!='..'){
@@ -185,20 +193,8 @@ foreach ($path as $k => $v) {
 		echo strTo("开始处理分类------->").$v.PHP_EOL;
 		foreach ($file as $key => $value) {
 			if($value!='.'&&$value!='..'){
-				file_name_format($v,$value);
-			}
-		}
-	}
-}
-
-$path = scandir($GLOBALS['video']);
-foreach ($path as $k => $v) {
-	if($v!='.'&&$v!='..'){
-		$file = scandir($GLOBALS['video'].'/'.$v);
-		echo "*********************".PHP_EOL.PHP_EOL.strTo("开始处理分类------->").$v.PHP_EOL.PHP_EOL."*********************".PHP_EOL;
-		foreach ($file as $key => $value) {
-			if($value!='.'&&$value!='..'){
-				$info = cutVideo($v,$value);
+				$dest = file_name_format($v,$value);
+				cutVideo($v,$dest);
 			}
 		}
 	}
