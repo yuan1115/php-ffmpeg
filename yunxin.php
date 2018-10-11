@@ -24,7 +24,7 @@ function strTo($str){
 } 
 
 /**
- * [getNeed 获取视频需要的背景音乐/片头/片尾/logo]
+ * [getNeed 随机获取对应分类的视频需要的部分]
  * @param  [type] $classify [分类名]
  * @param  [type] $para [全局变量参数如footer]
  * @param  [type] $hf   [是否是片头片尾]
@@ -60,6 +60,31 @@ function getNeed($classify,$para,$hf=0){
 	}else{
 		$res['path'] = isset($filename)?$path:'';
 		$res['filename'] = $filename;
+	}
+	return $res;
+}
+
+/**
+ * [getfooter 获取片头对应的片尾或随即片尾]
+ * @param  [type] $classify   [分类]
+ * @param  string $headerName [视频片头文件名]
+ * @param  string $headerPath [视频片头路径]
+ * @return [type]             [description]
+ */
+function getfooter($classify,$headerName='',$headerPath=''){
+	if($headerName){
+		if(is_file(str_replace('header', 'footer', $headerPath))){
+			$res['path'] = str_replace('header', 'footer', $headerPath);
+		}else if(is_file(str_replace('.mpg', '.mp4', str_replace('header', 'footer', $headerPath)))){
+			$cmd = 'ffmpeg -i '.str_replace('.mpg', '.mp4', str_replace('header', 'footer', $headerPath)).' -q 0 '.str_replace('.mp4', '.mpg', str_replace('.mpg', '.mp4', str_replace('header', 'footer', $headerPath)));
+			shell_exec($cmd);
+			unlink(str_replace('.mpg', '.mp4', str_replace('header', 'footer', $headerPath)));
+			$res['path'] = str_replace('header', 'footer', $headerPath);
+		}else{
+			$res = getNeed($classify,'footer',1);
+		}
+	}else{
+		$res = getNeed($classify,'footer',1);
 	}
 	return $res;
 }
@@ -167,7 +192,7 @@ function cutVideo($classify,$filename){
 	
 	//获取片尾
 	echo "*********************".PHP_EOL.PHP_EOL.strTo("开始获取片尾").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
-	$footerArr = getNeed($classify,$GLOBALS['footer'],1);
+	$footerArr = getfooter($classify,$headerArr['filename'],$headerArr['path']);
 	if($footerArr['path']){
 		$footer = '|'.$footerArr['path'];
 	}else{
