@@ -37,7 +37,7 @@ function getNeed($classify,$para,$hf=0){
 		$count = count($reArr);
 		$k = rand(2,$count+1);
 		$path = $GLOBALS[$para]."/".$classify.'/'.$reArr[$k];
-		$filename = $reArr[$classify][$k];
+		$filename = $reArr[$k];
 	}else{
 		$reArr = scandir($GLOBALS[$para].'/common');
 		unset($reArr[0],$reArr[1]);
@@ -101,10 +101,10 @@ function getConfig(){
 	foreach ($cof as $k => $v) {
 		$v = explode(";", $v);
 		$config[$v[0]]['classify'] = $v[0];
-		$config[$v[0]]['cut_max_time'] = (isset($v[1])&&$v[1])||$v[1]==0?$v[1]:$GLOBALS['cut_max_time'];
-		$config[$v[0]]['header_time'] = (isset($v[2])&&$v[2])||$v[2]==0?$v[2]:$GLOBALS['header_time'];
-		$config[$v[0]]['footer_time'] = (isset($v[3])&&$v[3])||$v[3]==0?$v[3]:$GLOBALS['footer_time'];
-		$config[$v[0]]['cut_video_time'] = (isset($v[4])&&$v[4])||$v[4]==0?$v[4]:$GLOBALS['cut_video_time'];
+		$config[$v[0]]['cut_max_time'] = isset($v[1])&&((int)$v[1]>0||isset($v[1])&&$v[1]=='0')?$v[1]:$GLOBALS['cut_max_time'];
+		$config[$v[0]]['header_time'] = isset($v[2])&&((int)$v[2]>0||isset($v[2])&&$v[2]=='0')?$v[2]:$GLOBALS['header_time'];
+		$config[$v[0]]['footer_time'] = isset($v[3])&&((int)$v[3]>0||isset($v[3])&&$v[3]=='0')?$v[3]:$GLOBALS['footer_time'];
+		$config[$v[0]]['cut_video_time'] = isset($v[4])&&((int)$v[4]>0||isset($v[4])&&$v[4]=='0')?$v[4]:$GLOBALS['cut_video_time'];
 	}
 	return $config;
 }
@@ -139,10 +139,6 @@ function file_name_format($classify,$fileName){
 	$filename = iconv('gbk', 'utf-8', $fileName);
 	$filename = explode(".mp4", $filename);
 	$filename = $filename[0];
-	$str = array('/','?','\\',':','"','|','<','>','*','“','”','！','？',' ','-','——');
-	foreach ($str as $k => $v) {
-		$filename = str_replace($v, '', $filename);
-	}
 	$res = translate($filename,'auto','zh');
 	$dstName = iconv('utf-8', 'gbk', $res['trans_result'][0]['dst']);
 	foreach ($str as $k => $v) {
@@ -171,6 +167,7 @@ function cutVideo($classify,$filename){
 	$outpath = $GLOBALS['video_out']."/".$classify."/".$filename;   //输出路径 
 	//获取配置文件
 	$config = getConfig();
+	print_r($config);die;
 	//获取视频信息
 	$videoInfo = getV($vpath);
 	$start_time = $config[$classify]['header_time'];
