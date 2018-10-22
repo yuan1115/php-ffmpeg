@@ -120,7 +120,7 @@ function getV($path){
 	echo strTo('开始获取').$path.strTo('视频信息').PHP_EOL;
 	$cmd = "ffprobe -v quiet -print_format json -show_format -show_streams -i ".$path;
 	$v = json_decode(shell_exec($cmd),true);
-	$result['duration'] = $v['format']['duration'];
+	$result['duration'] = $v['streams'][0]['duration'];
 	$result['size'] = $v['format']['size'];
 	$result['width'] = $v['streams'][0]['width'];
 	$result['height'] = $v['streams'][0]['height'];
@@ -139,6 +139,10 @@ function file_name_format($classify,$fileName){
 	$filename = iconv('gbk', 'utf-8', $fileName);
 	$filename = explode(".mp4", $filename);
 	$filename = $filename[0];
+	$str = array('/','?','\\',':','"','|','<','>','*','“','”','！','？',' ','-','——','&','，');
+	// foreach ($str as $k => $v) {
+	// 	$filename = str_replace($v, '', $filename);
+	// }
 	$res = translate($filename,'auto','zh');
 	$dstName = iconv('utf-8', 'gbk', $res['trans_result'][0]['dst']);
 	foreach ($str as $k => $v) {
@@ -167,7 +171,6 @@ function cutVideo($classify,$filename){
 	$outpath = $GLOBALS['video_out']."/".$classify."/".$filename;   //输出路径 
 	//获取配置文件
 	$config = getConfig();
-	print_r($config);die;
 	//获取视频信息
 	$videoInfo = getV($vpath);
 	$start_time = $config[$classify]['header_time'];
@@ -177,7 +180,7 @@ function cutVideo($classify,$filename){
 	echo "*********************".PHP_EOL.PHP_EOL.strTo("开始获取音乐").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
 	$mp3Arr = getNeed($classify,$GLOBALS['mp3']);
 	$mp3 = $mp3Arr['path'];
-
+	echo $mp3.PHP_EOL;
 	//获取片头
 	echo "*********************".PHP_EOL.PHP_EOL.strTo("开始获取片头").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
 	$headerArr = getNeed($classify,$GLOBALS['header'],1);
@@ -186,7 +189,7 @@ function cutVideo($classify,$filename){
 	}else{
 		$header = '';
 	}
-	
+	echo $header.PHP_EOL;
 	//获取片尾
 	echo "*********************".PHP_EOL.PHP_EOL.strTo("开始获取片尾").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
 	$footerArr = getfooter($classify,$headerArr['filename'],$headerArr['path']);
@@ -195,11 +198,13 @@ function cutVideo($classify,$filename){
 	}else{
 		$footer = '';
 	}
+	echo $footer.PHP_EOL;
 
 	//获取logo
 	echo "*********************".PHP_EOL.PHP_EOL.strTo("开始获取logo").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
 	$logoArr = getNeed($classify,$GLOBALS['logo']);
 	$logo = $logoArr['path'];
+	echo $logo.PHP_EOL;
 
 	//判断是否需要分段
 	if($videoInfo['duration'] >= $config[$classify]['cut_max_time'] && $config[$classify]['cut_max_time']!=0){
@@ -218,17 +223,17 @@ function cutVideo($classify,$filename){
 		if($mp3){
 			//去除片头片尾加音乐
 			echo "*********************".PHP_EOL.PHP_EOL.strTo("开始去除片头片尾加背景音乐").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
-			$cmd = 'ffmpeg -i '.$vpath.' -stream_loop -1 -i '.$mp3.' -map 0:v '.$start_time.$end_time.' -c:v h264 -map 1:a -c:a copy cache/'.$filename;
+			$cmd = 'ffmpeg -i '.$vpath.' -stream_loop -1 -i '.$mp3.' -map 0:v '.$start_time.$end_time.' -c:v h264 -map 1:a -c:a copy  cache/'.$filename;
 			shell_exec($cmd);
 		}else{
 			if($start_time&&$end_time){
-				$cmd = 'ffmpeg '.$start_time.$end_time.' -i '.$vpath.' cache/'.$filename;
+				$cmd = 'ffmpeg '.$start_time.$end_time.' -i '.$vpath.'  cache/'.$filename;
 				shell_exec($cmd);
 			}else{
 				rename($vpath, 'cache/'.$filename);
 			}
 		}
-
+		
 		//判断是否有片头片尾
 		if(!$footer&&!$header){
 			echo strTo('没有可用的片头片尾').PHP_EOL;
@@ -236,12 +241,12 @@ function cutVideo($classify,$filename){
 		}else{
 			//转换成mpg
 			echo "*********************".PHP_EOL.PHP_EOL.strTo("开始转换成mpg").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
-			$cmd1 = 'ffmpeg -i '.'cache/'.$filename.' -q 0 cache/'.$filename.'.mpg'; 
+			$cmd1 = 'ffmpeg -i '.'cache/'.$filename.' -q 0  cache/'.$filename.'.mpg'; 
 			shell_exec($cmd1);
 
 			//添加片头片尾（合成视频）
 			echo "*********************".PHP_EOL.PHP_EOL.strTo("开始添加片头片尾（合成视频）").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
-			$cmd2 = 'ffmpeg -i "concat:'.$header.'cache/'.$filename.'.mpg'.$footer.'" -q:a 10 cache/out'.$filename;
+			$cmd2 = 'ffmpeg -i "concat:'.$header.'cache/'.$filename.'.mpg'.$footer.'" -q:a 10  cache/out'.$filename;
 			shell_exec($cmd2);
 		}
 
@@ -279,4 +284,5 @@ foreach ($path as $k => $v) {
 		}
 	}
 }
+shell_exec('shutdown -s -t 60');
 ?>
