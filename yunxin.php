@@ -1,4 +1,4 @@
-<?php 
+﻿<?php 
 header('Content-type:text/html;charset=utf-8');
 include './baidu_transapi.php';
 $GLOBALS['header'] = "header";           //片头
@@ -51,7 +51,8 @@ function getNeed($classify,$para,$hf=0){
 			$filename = '';
 		}
 	}
-	if($hf==1&&strpos($filename, '.mp4')){
+	$type = pathinfo($path,PATHINFO_EXTENSION);
+	if($hf==1&&$type=='mp4'){
 		$cmd = 'ffmpeg -i '.$path.' -q 0 '.str_replace('.mp4', '.mpg', $path);
 		shell_exec($cmd);
 		$res['path'] = isset($filename)?str_replace('.mp4', '.mpg', $path):'';
@@ -137,7 +138,8 @@ function getV($path){
  */
 function file_name_format($classify,$fileName){
 	$filename = iconv('gbk', 'utf-8', $fileName);
-	$filename = explode(".mp4", $filename);
+	$type = pathinfo($GLOBALS['video'].'/'.$classify.'/'.$fileName,PATHINFO_EXTENSION);
+	$filename = explode(".".$type, $filename);
 	$filename = $filename[0];
 	$str = array('/','?','\\',':','"','|','<','>','*','“','”','！','？',' ','-','——','&','，');
 	// foreach ($str as $k => $v) {
@@ -146,17 +148,17 @@ function file_name_format($classify,$fileName){
 	$res = translate($filename,'auto','zh');
 	$dstName = iconv('utf-8', 'gbk', $res['trans_result'][0]['dst']);
 	foreach ($str as $k => $v) {
-		$dstName = str_replace($v, '', $dstName);
+		$dstName = str_replace(strTo($v), '', $dstName);
 	}
 	if($dstName){
 		$f = '"'.getcwd().'\\'.$GLOBALS['video'].'\\'.$classify.'\\'.$fileName.'"';
-		$of ='"'.getcwd().'\\'.$GLOBALS['video'].'\\'.$classify.'\\'.$dstName.'.mp4"';
+		$of ='"'.getcwd().'\\'.$GLOBALS['video'].'\\'.$classify.'\\'.$dstName.'.'.$type.'"';
 		$cmd = 'move '.$f." $of";
 		shell_exec($cmd);
 	}else{
 		$dstName = $dstName?$dstName:$fileName;	
 	}
-	return $dstName.".mp4";
+	return $dstName.".".$type;
 }
 
 /**
@@ -205,15 +207,25 @@ function cutVideo($classify,$filename){
 	$logoArr = getNeed($classify,$GLOBALS['logo']);
 	$logo = $logoArr['path'];
 	echo $logo.PHP_EOL;
-
+	// print_r($config);die;
 	//判断是否需要分段
 	if($videoInfo['duration'] >= $config[$classify]['cut_max_time'] && $config[$classify]['cut_max_time']!=0){
-
+		$count = floor($videoInfo['duration']/$config[$classify]['cut_video_time']);
+		for($i=1;$i<=$count;$i++){
+			if($i==$count){
+				$cmd = 'ffmpeg -ss '.$config[$classify]['cut_video_time']*($i-1).' -t '.$config[$classify]['cut_video_time'].' -i '.$vpath.' -vcodec copy -acodec copy '.str_replace('.mp4', '' , $vpath).$i.'.mp4';
+			}else{
+				$cmd = 'ffmpeg -ss '.$config[$classify]['cut_video_time']*($i-1).' -t '.$config[$classify]['cut_video_time']*$i.' -i '.$vpath.' -vcodec copy -acodec copy '.str_replace('.mp4', '' , $vpath).$i.'.mp4';
+			}
+			shell_exec($cmd);
+			cutVideo($classify,str_replace('.mp4','',$filename).$i.'.mp4');
+		}
+		unlink($vpath);
 	}else{
 		//判断开始时间，结束时间
 		if((int)$start_time+(int)$end_time<$videoInfo['duration']){
 			$start_time = $start_time>0?' -ss '.$start_time:'';
-			$end_time = $config[$classify]['footer_time']>0?' -t '.$end_time:'';
+			$end_time = $end_time>0?' -t '.$end_time:'';
 		}else{
 			$start_time = '';
 			$end_time = '';
@@ -233,7 +245,7 @@ function cutVideo($classify,$filename){
 				rename($vpath, 'cache/'.$filename);
 			}
 		}
-		
+
 		//判断是否有片头片尾
 		if(!$footer&&!$header){
 			echo strTo('没有可用的片头片尾').PHP_EOL;
@@ -284,5 +296,5 @@ foreach ($path as $k => $v) {
 		}
 	}
 }
-shell_exec('shutdown -s -t 60');
+//shell_exec('shutdown -s -t 60');
 ?>
