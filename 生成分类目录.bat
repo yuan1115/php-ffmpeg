@@ -6,6 +6,7 @@ if not exist video_out md video_out
 if not exist header md header
 if not exist footer md footer
 if not exist logo md logo
+if not exist cache md cache
 
 if not exist mp3/common ( 
      cd mp3
