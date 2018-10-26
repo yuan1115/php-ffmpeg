@@ -1,5 +1,6 @@
 ﻿<?php 
-header('Content-type:text/html;charset=utf-8');
+header('content-type: text/html; charset=utf-8');
+date_default_timezone_set('PRC');
 include './baidu_transapi.php';
 $GLOBALS['header'] = "header";           //片头
 $GLOBALS['footer'] = "footer";           //片尾
@@ -169,6 +170,12 @@ function file_name_format($classify,$fileName){
  */
 function cutVideo($classify,$filename){
 	if(!is_dir('cache')){mkdir('cache');}
+	$cache = scandir('cache');
+	foreach ($cache as $k => $v) {
+		if($v!='.'&&$v!='..'){
+			unlink('cache/'.$v);
+		}
+	}
 	$vpath = $GLOBALS['video']."/".$classify."/".$filename;         //视频路径
 	$outpath = $GLOBALS['video_out']."/".$classify."/".$filename;   //输出路径 
 	//获取配置文件
@@ -183,6 +190,7 @@ function cutVideo($classify,$filename){
 	$mp3Arr = getNeed($classify,$GLOBALS['mp3']);
 	$mp3 = $mp3Arr['path'];
 	echo $mp3.PHP_EOL;
+
 	//获取片头
 	echo "*********************".PHP_EOL.PHP_EOL.strTo("开始获取片头").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
 	$headerArr = getNeed($classify,$GLOBALS['header'],1);
@@ -192,6 +200,7 @@ function cutVideo($classify,$filename){
 		$header = '';
 	}
 	echo $header.PHP_EOL;
+
 	//获取片尾
 	echo "*********************".PHP_EOL.PHP_EOL.strTo("开始获取片尾").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
 	$footerArr = getfooter($classify,$headerArr['filename'],$headerArr['path']);
@@ -207,94 +216,125 @@ function cutVideo($classify,$filename){
 	$logoArr = getNeed($classify,$GLOBALS['logo']);
 	$logo = $logoArr['path'];
 	echo $logo.PHP_EOL;
-	// print_r($config);die;
+
 	//判断是否需要分段
 	if($videoInfo['duration'] >= $config[$classify]['cut_max_time'] && $config[$classify]['cut_max_time']!=0){
 		$count = floor($videoInfo['duration']/$config[$classify]['cut_video_time']);
 		for($i=1;$i<=$count;$i++){
-			if($i==$count){
-				$cmd = 'ffmpeg -ss '.$config[$classify]['cut_video_time']*($i-1).' -t '.$config[$classify]['cut_video_time'].' -i '.$vpath.' -vcodec copy -acodec copy '.str_replace('.mp4', '' , $vpath).$i.'.mp4';
+			$newPath = str_replace('.mp4', '' , $vpath).$i.'.mp4';
+			$newFile = str_replace('.mp4','',$filename).$i.'.mp4';
+			//判断是否已经分段
+			if(is_file($newPath)){
+				$vInfo = getV($newPath);
 			}else{
-				$cmd = 'ffmpeg -ss '.$config[$classify]['cut_video_time']*($i-1).' -t '.$config[$classify]['cut_video_time']*$i.' -i '.$vpath.' -vcodec copy -acodec copy '.str_replace('.mp4', '' , $vpath).$i.'.mp4';
+				$vInfo['duration'] = 0;
 			}
-			shell_exec($cmd);
-			cutVideo($classify,str_replace('.mp4','',$filename).$i.'.mp4');
+			if($vInfo['duration']>($config[$classify]['cut_video_time']-3)&&$vInfo['duration']<($config[$classify]['cut_video_time']+3)){
+				echo strTo("视频").$newFile.strTo("已存在，开始剪辑").PHP_EOL;
+			}else{
+				if($i==$count){
+					$cmd = 'ffmpeg -ss '.$config[$classify]['cut_video_time']*($i-1).' -t '.$config[$classify]['cut_video_time'].' -i '.$vpath.' -vcodec copy -acodec copy '.$newPath;
+				}else{
+					$cmd = 'ffmpeg -ss '.$config[$classify]['cut_video_time']*($i-1).' -t '.$config[$classify]['cut_video_time']*$i.' -i '.$vpath.' -vcodec copy -acodec copy '.$newPath;
+				}
+				shell_exec($cmd);
+			}
+			cutVideo($classify,$newFile);
 		}
 		unlink($vpath);
 	}else{
-		//判断开始时间，结束时间
-		if((int)$start_time+(int)$end_time<$videoInfo['duration']){
-			$start_time = $start_time>0?' -ss '.$start_time:'';
-			$end_time = $end_time>0?' -t '.$end_time:'';
+		//先判断视频是否已经执行完成
+		if(is_file($outpath)){
+			$vInfo = getV($outpath);
 		}else{
-			$start_time = '';
-			$end_time = '';
+			$vInfo['duration'] = 0;
 		}
-
-		//判断MP3是否存在
-		if($mp3){
-			//去除片头片尾加音乐
-			echo "*********************".PHP_EOL.PHP_EOL.strTo("开始去除片头片尾加背景音乐").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
-			$cmd = 'ffmpeg -i '.$vpath.' -stream_loop -1 -i '.$mp3.' -map 0:v '.$start_time.$end_time.' -c:v h264 -map 1:a -c:a copy  cache/'.$filename;
-			shell_exec($cmd);
+		if($vInfo['duration']>=($videoInfo['duration']-$start_time-$end_time)&&$vInfo['duration']<$videoInfo['duration']+60){
+			echo strTo("视频").$filename.strTo("已经存在，跳过").PHP_EOL;
+			unlink($vpath);
 		}else{
-			if($start_time&&$end_time){
-				$cmd = 'ffmpeg '.$start_time.$end_time.' -i '.$vpath.'  cache/'.$filename;
+			if(is_file($outpath)){unlink($outpath);}
+			//判断开始时间，结束时间
+			if((int)$start_time+(int)$end_time<$videoInfo['duration']){
+				$start_time = $start_time>0?' -ss '.$start_time:'';
+				$end_time = $end_time>0?' -t '.$end_time:'';
+			}else{
+				$start_time = '';
+				$end_time = '';
+			}
+
+			//判断MP3是否存在
+			if($mp3){
+				//去除片头片尾加音乐
+				echo "*********************".PHP_EOL.PHP_EOL.strTo("开始去除片头片尾加背景音乐").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
+				$cmd = 'ffmpeg -i '.$vpath.' -stream_loop -1 -i '.$mp3.' -map 0:v '.$start_time.$end_time.' -c:v h264 -map 1:a -c:a copy  cache/'.$filename;
 				shell_exec($cmd);
 			}else{
-				rename($vpath, 'cache/'.$filename);
+				if($start_time&&$end_time){
+					$cmd = 'ffmpeg '.$start_time.$end_time.' -i '.$vpath.'  cache/'.$filename;
+					shell_exec($cmd);
+				}else{
+					rename($vpath, 'cache/'.$filename);
+				}
+			}
+
+			//判断是否有片头片尾
+			if(!$footer&&!$header){
+				echo strTo('没有可用的片头片尾').PHP_EOL;
+				$cmd2 = rename('cache/'.$filename, 'cache/out'.$filename);
+			}else{
+				//转换成mpg
+				echo "*********************".PHP_EOL.PHP_EOL.strTo("开始转换成mpg").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
+				$cmd1 = 'ffmpeg -i '.'cache/'.$filename.' -q 0  cache/'.$filename.'.mpg'; 
+				shell_exec($cmd1);
+
+				//添加片头片尾（合成视频）
+				echo "*********************".PHP_EOL.PHP_EOL.strTo("开始添加片头片尾（合成视频）").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
+				$cmd2 = 'ffmpeg -i "concat:'.$header.'cache/'.$filename.'.mpg'.$footer.'" -q:a 10  cache/out'.$filename;
+				shell_exec($cmd2);
+			}
+
+			//判断是否有logo
+			if($logo){
+				$cmd3 = 'ffmpeg -i "cache/out'.$filename.'" -i '.$logo.' -filter_complex "[1:v][0:v]scale2ref=150:150 [wm][base];[base][wm]overlay=main_w-overlay_w-10:main_h-overlay_h-10" '.$outpath;
+				shell_exec($cmd3);
+			}else{
+				$cmd3 = rename('cache/out'.$filename, $outpath);
 			}
 		}
-
-		//判断是否有片头片尾
-		if(!$footer&&!$header){
-			echo strTo('没有可用的片头片尾').PHP_EOL;
-			$cmd2 = rename('cache/'.$filename, 'cache/out'.$filename);
-		}else{
-			//转换成mpg
-			echo "*********************".PHP_EOL.PHP_EOL.strTo("开始转换成mpg").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
-			$cmd1 = 'ffmpeg -i '.'cache/'.$filename.' -q 0  cache/'.$filename.'.mpg'; 
-			shell_exec($cmd1);
-
-			//添加片头片尾（合成视频）
-			echo "*********************".PHP_EOL.PHP_EOL.strTo("开始添加片头片尾（合成视频）").PHP_EOL.PHP_EOL."*********************".PHP_EOL;
-			$cmd2 = 'ffmpeg -i "concat:'.$header.'cache/'.$filename.'.mpg'.$footer.'" -q:a 10  cache/out'.$filename;
-			shell_exec($cmd2);
-		}
-
-		//判断是否有logo
-		if($logo){
-			$cmd3 = 'ffmpeg -i "cache/out'.$filename.'" -i '.$logo.' -filter_complex "[1:v][0:v]scale2ref=150:150 [wm][base];[base][wm]overlay=main_w-overlay_w-10:main_h-overlay_h-10" '.$GLOBALS['video_out'].'/'.$classify.'/'.$filename;
-			shell_exec($cmd3);
-		}else{
-			$cmd3 = rename('cache/out'.$filename, $GLOBALS['video_out'].'/'.$classify.'/'.$filename);
-		}
-
 	}
-	$cache = scandir('cache');
-	foreach ($cache as $k => $v) {
-		if($v!='.'&&$v!='..'){
-			unlink('cache/'.$v);
-		}
-	}
-	if(is_file($GLOBALS['video_out'].'/'.$classify.'/'.$filename)&&is_file($GLOBALS['video'].'/'.$classify.'/'.$filename)){
+	if(is_file($outpath)&&is_file($vpath)){
 		unlink($vpath);
 	}
+
 }
 
+function getClassify(){
+	$path = scandir($GLOBALS['video']);
+	foreach ($path as $k => $v) {
+		if($v!='.'&&$v!='..'){
+			echo strTo("开始处理分类------->").$v.PHP_EOL;
+			getFile($v);
+		}
+	}
+	$end_time = date("H",time());
+	if($end_time>18||$end_time<9){
+		shell_exec('shutdown -s -t 60');	
+	}
+}
 
-$path = scandir($GLOBALS['video']);
-foreach ($path as $k => $v) {
-	if($v!='.'&&$v!='..'){
-		$file = scandir($GLOBALS['video'].'/'.$v);
-		echo strTo("开始处理分类------->").$v.PHP_EOL;
-		foreach ($file as $key => $value) {
-			if($value!='.'&&$value!='..'){
-				$dest = file_name_format($v,$value);
-				cutVideo($v,$dest);
-			}
+function getFile($classify){
+	$file = scandir($GLOBALS['video'].'/'.$classify);
+	foreach ($file as $key => $value) {
+		if($key==2){
+			$dest = file_name_format($classify,$value);
+			cutVideo($classify,$dest);
+			// echo $value.strTo("视频处理完成休眠5秒").PHP_EOL;
+			// sleep(5);
+			getFile($classify);
 		}
 	}
 }
-//shell_exec('shutdown -s -t 60');
+
+getClassify();
 ?>
